@@ -8,6 +8,13 @@ if (!isset($_SESSION['user_id'])) {
 
 require __DIR__ . '/config.php';
 
+// Avatar URL (random but stable per user)
+$avatarUrl = '';
+if (!empty($_SESSION['user_id'])) {
+  $seed = $_SESSION['user_email'] ?? ($_SESSION['user_name'] ?? (string)$_SESSION['user_id']);
+  $avatarUrl = 'https://i.pravatar.cc/40?u=' . urlencode($seed);
+}
+
 $errors = [];
 $success = '';
 $old = [
@@ -49,21 +56,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $old['location'] = trim($locationSelect);
   }
 
+  $incomplete = false;
   if ($old['category_id'] === '' || !ctype_digit($old['category_id'])) {
     $errors[] = 'Kategori wajib dipilih.';
+    $incomplete = true;
   }
   if ($old['title'] === '') {
     $errors[] = 'Judul wajib diisi.';
+    $incomplete = true;
   }
   if ($old['price'] === '' || !is_numeric($old['price']) || (float)$old['price'] < 0) {
     $errors[] = 'Harga tidak valid.';
+    $incomplete = true;
   }
   if ($old['location'] === '') {
     $errors[] = 'Lokasi wajib diisi.';
+    $incomplete = true;
+  }
+
+  if ($incomplete) {
+    array_unshift($errors, 'Harap lengkapi semua field wajib.');
+  }
+
+  // Validate at least one image selected and valid
+  $validIdx = [];
+  $allowedExt = ['jpg','jpeg','png','webp'];
+  $maxSize = 2 * 1024 * 1024; // 2MB
+  if (!empty($_FILES['images']) && is_array($_FILES['images']['name'])) {
+    $count = count($_FILES['images']['name']);
+    for ($i = 0; $i < $count && $i < 5; $i++) {
+      $errCode = $_FILES['images']['error'][$i] ?? UPLOAD_ERR_NO_FILE;
+      if ($errCode !== UPLOAD_ERR_OK) continue;
+      $name = $_FILES['images']['name'][$i] ?? '';
+      $size = $_FILES['images']['size'][$i] ?? 0;
+      $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+      if (!in_array($ext, $allowedExt, true)) continue;
+      if ($size > $maxSize) continue;
+      $validIdx[] = $i;
+    }
+  }
+  if (count($validIdx) === 0) {
+    $errors[] = 'Minimal 1 foto produk wajib diunggah.';
   }
 
   if (!$errors) {
     try {
+      $pdo->beginTransaction();
       $stmt = $pdo->prepare('INSERT INTO ads (user_id, category_id, title, description, price, location) VALUES (?, ?, ?, ?, ?, ?)');
       $stmt->execute([
         $_SESSION['user_id'],
@@ -78,34 +116,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       // Handle images (optional)
       if (!empty($_FILES['images']) && is_array($_FILES['images']['name'])) {
         $count = count($_FILES['images']['name']);
-        $allowedExt = ['jpg','jpeg','png'];
+        $allowedExt = ['jpg','jpeg','png', 'webp'];
         $maxSize = 2 * 1024 * 1024; // 2MB
-        $uploadDir = __DIR__ . DIRECTORY_SEPARATOR . 'uploads';
-        if (!is_dir($uploadDir)) {
-          @mkdir($uploadDir, 0777, true);
-        }
-        for ($i = 0; $i < $count && $i < 5; $i++) {
-          $err = $_FILES['images']['error'][$i] ?? UPLOAD_ERR_NO_FILE;
-          if ($err !== UPLOAD_ERR_OK) { continue; }
-          $tmp = $_FILES['images']['tmp_name'][$i] ?? '';
-          $name = $_FILES['images']['name'][$i] ?? '';
-          $size = $_FILES['images']['size'][$i] ?? 0;
-          $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-          if (!in_array($ext, $allowedExt, true)) { continue; }
-          if ($size > $maxSize) { continue; }
-          $newName = 'ad_' . $adId . '_' . uniqid('', true) . '.' . $ext;
-          $dest = $uploadDir . DIRECTORY_SEPARATOR . $newName;
-          if (@move_uploaded_file($tmp, $dest)) {
-            $relative = 'uploads/' . $newName;
-            $stmtImg = $pdo->prepare('INSERT INTO ad_images (ad_id, image_path) VALUES (?, ?)');
-            $stmtImg->execute([$adId, $relative]);
+        $uploadedCount = 0;
+        if (!empty($validIdx)) {
+          $uploadDir = __DIR__ . DIRECTORY_SEPARATOR . 'uploads';
+          if (!is_dir($uploadDir)) {
+            if (!mkdir($uploadDir, 0777, true)) {
+              $errors[] = 'Gagal membuat folder uploads.';
+            }
+          }
+          foreach ($validIdx as $i) {
+            $errCode = $_FILES['images']['error'][$i] ?? UPLOAD_ERR_NO_FILE;
+            $name = $_FILES['images']['name'][$i] ?? '';
+            if ($errCode !== UPLOAD_ERR_OK) {
+              if ($errCode !== UPLOAD_ERR_NO_FILE) {
+                $errors[] = 'Gagal mengunggah file ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . ' (error code ' . $errCode . ').';
+              }
+              continue;
+            }
+            $tmp = $_FILES['images']['tmp_name'][$i] ?? '';
+            $size = $_FILES['images']['size'][$i] ?? 0;
+            $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+            if (!in_array($ext, $allowedExt, true)) {
+              $errors[] = 'Format file tidak didukung: ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+              continue;
+            }
+            if ($size > $maxSize) {
+              $errors[] = 'Ukuran file terlalu besar (>2MB): ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+              continue;
+            }
+            $newName = 'ad_' . $adId . '_' . uniqid('', true) . '.' . $ext;
+            $dest = $uploadDir . DIRECTORY_SEPARATOR . $newName;
+            if (move_uploaded_file($tmp, $dest)) {
+              $relative = 'uploads/' . $newName;
+              $stmtImg = $pdo->prepare('INSERT INTO ad_images (ad_id, image_path) VALUES (?, ?)');
+              $stmtImg->execute([$adId, $relative]);
+              $uploadedCount++;
+            } else {
+              $errors[] = 'Gagal memindahkan file: ' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+            }
+          }
+          if ($count > 0 && $uploadedCount === 0) {
+            $errors[] = 'Tidak ada gambar yang berhasil diunggah. Periksa batas ukuran di pengaturan PHP (upload_max_filesize, post_max_size).';
           }
         }
       }
 
-      $success = 'Iklan berhasil dipasang.';
-      $old = ['category_id' => '', 'title' => '', 'description' => '', 'price' => '', 'location' => ''];
+      if (!$errors) {
+        $pdo->commit();
+        $success = 'Iklan berhasil dipasang.';
+        $old = ['category_id' => '', 'title' => '', 'description' => '', 'price' => '', 'location' => ''];
+      }
     } catch (Throwable $e) {
+      if ($pdo->inTransaction()) { $pdo->rollBack(); }
       $errors[] = 'Gagal menyimpan iklan.';
     }
   }
@@ -144,9 +208,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           </svg>
         </button>
         <div class="hidden md:flex items-center gap-3">
-          <a href="/KF-OLX/login.php" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Masuk</a>
-          <a href="/KF-OLX/register.php" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Daftar</a>
-          <a href="/KF-OLX/post-ad.php" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-semibold hover:bg-emerald-700">Pasang Iklan</a>
+          <?php if (!empty($_SESSION['user_id'])): ?>
+            <img src="<?php echo htmlspecialchars($avatarUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="avatar" class="w-8 h-8 rounded-full border" />
+            <div class="px-1 py-2 text-sm font-semibold">Halo, <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Pengguna', ENT_QUOTES, 'UTF-8'); ?></div>
+            <a href="/KF-OLX/logout.php" class="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700">Keluar</a>
+            <a href="/KF-OLX/post-ad.php" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-semibold hover:bg-emerald-700">Pasang Iklan</a>
+          <?php else: ?>
+            <a href="/KF-OLX/login.php" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Masuk</a>
+            <a href="/KF-OLX/register.php" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Daftar</a>
+            <a href="/KF-OLX/post-ad.php" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-semibold hover:bg-emerald-700">Pasang Iklan</a>
+          <?php endif; ?>
         </div>
       </div>
       <div id="mobileMenu" class="md:hidden hidden border-t">
@@ -155,9 +226,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <a href="/KF-OLX/#categories" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Kategori</a>
           <a href="/KF-OLX/#latest" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Iklan Terbaru</a>
           <hr class="my-2">
-          <a href="login.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Masuk</a>
-          <a href="register.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Daftar</a>
-          <a href="post-ad.php" class="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 text-center">Pasang Iklan</a>
+          <?php if (!empty($_SESSION['user_id'])): ?>
+            <div class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium">
+              <img src="<?php echo htmlspecialchars($avatarUrl, ENT_QUOTES, 'UTF-8'); ?>" alt="avatar" class="w-8 h-8 rounded-full border" />
+              <span>Halo, <?php echo htmlspecialchars($_SESSION['user_name'] ?? 'Pengguna', ENT_QUOTES, 'UTF-8'); ?></span>
+            </div>
+            <a href="/KF-OLX/logout.php" class="block px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-gray-50">Keluar</a>
+            <a href="/KF-OLX/post-ad.php" class="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 text-center">Pasang Iklan</a>
+          <?php else: ?>
+            <a href="/KF-OLX/login.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Masuk</a>
+            <a href="/KF-OLX/register.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Daftar</a>
+            <a href="/KF-OLX/post-ad.php" class="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 text-center">Pasang Iklan</a>
+          <?php endif; ?>
         </div>
       </div>
     </div>
@@ -183,7 +263,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               </div>
             <?php endif; ?>
             <?php if ($success): ?>
-              <div class="rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-4 py-3 text-sm">
+              <div id="successBanner" class="rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-4 py-3 text-sm">
                 <?php echo htmlspecialchars($success, ENT_QUOTES, 'UTF-8'); ?>
               </div>
             <?php endif; ?>
@@ -331,6 +411,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         sel.addEventListener('change', sync);
         // initial
         sync();
+      }
+
+      // Auto-dismiss success after 5s
+      const success = document.getElementById('successBanner');
+      if (success) {
+        setTimeout(function(){ success.classList.add('hidden'); }, 5000);
       }
 
       // Image preview thumbnails with remove (X)
