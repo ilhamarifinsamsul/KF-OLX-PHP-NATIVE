@@ -1,3 +1,39 @@
+<?php
+session_start();
+require __DIR__ . '/config.php';
+
+$errors = [];
+$old = ['email' => ''];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $old['email'] = $email;
+
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Email tidak valid.';
+    }
+    if ($password === '') {
+        $errors[] = 'Password wajib diisi.';
+    }
+
+    if (!$errors) {
+        $stmt = $pdo->prepare('SELECT id, name, email, password FROM users WHERE email = ? LIMIT 1');
+        $stmt->execute([$email]);
+        $user = $stmt->fetch();
+        if (!$user || !password_verify($password, $user['password'])) {
+            $errors[] = 'Email atau password salah.';
+        } else {
+            $_SESSION['user_id'] = $user['id'];
+            $_SESSION['user_name'] = $user['name'];
+            $_SESSION['user_email'] = $user['email'];
+            $_SESSION['flash'] = 'Berhasil login';
+            header('Location: index.php');
+            exit;
+        }
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -13,42 +49,6 @@
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
-  <!-- <header class="border-b bg-white">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16">
-        <a href="/KF-OLX/" class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded bg-emerald-600 text-white grid place-items-center font-extrabold">KF</div>
-          <span class="text-xl font-bold">OLX</span>
-        </a>
-        <nav class="hidden md:flex items-center gap-6 text-sm">
-          <a href="/KF-OLX/" class="hover:text-emerald-600">Beranda</a>
-          <a href="/KF-OLX/#categories" class="hover:text-emerald-600">Kategori</a>
-          <a href="/KF-OLX/#latest" class="hover:text-emerald-600">Iklan Terbaru</a>
-        </nav>
-        <button id="mobileMenuButton" class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-emerald-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500" aria-controls="mobileMenu" aria-expanded="false">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <div class="hidden md:flex items-center gap-3">
-          <a href="/KF-OLX/login.php" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Masuk</a>
-          <a href="/KF-OLX/register.php" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Daftar</a>
-          <a href="#post-ad" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-semibold hover:bg-emerald-700">Pasang Iklan</a>
-        </div>
-      </div>
-      <div id="mobileMenu" class="md:hidden hidden border-t">
-        <div class="px-4 py-3 space-y-2 bg-white">
-          <a href="/KF-OLX/" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Beranda</a>
-          <a href="/KF-OLX/#categories" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Kategori</a>
-          <a href="/KF-OLX/#latest" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Iklan Terbaru</a>
-          <hr class="my-2">
-          <a href="/KF-OLX/login.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Masuk</a>
-          <a href="/KF-OLX/register.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Daftar</a>
-          <a href="#post-ad" class="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 text-center">Pasang Iklan</a>
-        </div>
-      </div>
-    </div>
-  </header> -->
 
   <main>
     <section class="bg-white border-b text-center">
@@ -61,14 +61,28 @@
     <section class="py-10">
       <div class="max-w-md mx-auto px-4 sm:px-6 lg:px-8">
         <div class="bg-white border rounded-lg p-6 shadow-sm">
-          <form action="#" method="post" class="space-y-4">
+          <?php if (!empty($errors)): ?>
+            <div class="mb-4 rounded-md border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
+              <?php foreach ($errors as $e): ?>
+                <div><?php echo htmlspecialchars($e, ENT_QUOTES, 'UTF-8'); ?></div>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+          <form action="" method="post" class="space-y-4" novalidate>
             <div>
               <label for="email" class="block text-sm font-medium mb-1">Email</label>
-              <input type="email" id="email" name="email" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="nama@email.com" required>
+              <input type="email" id="email" name="email" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="nama@email.com" required value="<?php echo htmlspecialchars($old['email'], ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div>
               <label for="password" class="block text-sm font-medium mb-1">Password</label>
-              <input type="password" id="password" name="password" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="••••••••" required>
+              <div class="relative">
+                <input type="password" id="password" name="password" class="w-full rounded-md border border-gray-300 pr-10 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="••••••••" required>
+                <button type="button" class="absolute inset-y-0 right-0 px-3 grid place-items-center text-gray-500 hover:text-gray-700" aria-label="Toggle password" data-toggle="password" data-target="password" aria-pressed="false">
+                  <span class="pointer-events-none">
+                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </span>
+                </button>
+              </div>
             </div>
             <div class="flex items-center justify-between">
               <label class="inline-flex items-center gap-2 text-sm">
@@ -152,11 +166,23 @@
     (function(){
       const btn = document.getElementById('mobileMenuButton');
       const menu = document.getElementById('mobileMenu');
-      if (!btn || !menu) return;
-      btn.addEventListener('click', function(){
-        const isHidden = menu.classList.contains('hidden');
-        menu.classList.toggle('hidden');
-        btn.setAttribute('aria-expanded', String(isHidden));
+      if (btn && menu) {
+        btn.addEventListener('click', function(){
+          const isHidden = menu.classList.contains('hidden');
+          menu.classList.toggle('hidden');
+          btn.setAttribute('aria-expanded', String(isHidden));
+        });
+      }
+      const togglers = document.querySelectorAll('[data-toggle="password"]');
+      togglers.forEach(function(t){
+        t.addEventListener('click', function(){
+          const targetId = t.getAttribute('data-target');
+          const input = document.getElementById(targetId);
+          if (!input) return;
+          const isPassword = input.getAttribute('type') === 'password';
+          input.setAttribute('type', isPassword ? 'text' : 'password');
+          t.setAttribute('aria-pressed', String(isPassword));
+        });
       });
     })();
   </script>

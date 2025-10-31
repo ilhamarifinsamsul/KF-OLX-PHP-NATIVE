@@ -1,3 +1,116 @@
+<?php
+session_start();
+if (!isset($_SESSION['user_id'])) {
+  $_SESSION['flash'] = 'Harus login dulu';
+  header('Location: login.php');
+  exit;
+}
+
+require __DIR__ . '/config.php';
+
+$errors = [];
+$success = '';
+$old = [
+  'category_id' => '',
+  'title' => '',
+  'description' => '',
+  'price' => '',
+  'location' => ''
+];
+
+// Load categories
+$categories = [];
+try {
+  $stmt = $pdo->query('SELECT id, name FROM categories ORDER BY name');
+  $categories = $stmt->fetchAll();
+} catch (Throwable $e) {
+  $errors[] = 'Gagal memuat kategori.';
+}
+
+// Load distinct locations from existing ads
+$locations = [];
+try {
+  $stmtLoc = $pdo->query("SELECT DISTINCT location FROM ads WHERE location IS NOT NULL AND location <> '' ORDER BY location");
+  $locations = array_map(function($row){ return $row['location']; }, $stmtLoc->fetchAll());
+} catch (Throwable $e) {
+  // optional: ignore if empty
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+  $old['category_id'] = trim($_POST['category_id'] ?? '');
+  $old['title'] = trim($_POST['title'] ?? '');
+  $old['description'] = trim($_POST['description'] ?? '');
+  $old['price'] = trim($_POST['price'] ?? '');
+  $locationSelect = $_POST['location_select'] ?? '';
+  $locationOther  = trim($_POST['location_other'] ?? '');
+  if ($locationSelect === 'OTHER') {
+    $old['location'] = $locationOther;
+  } else {
+    $old['location'] = trim($locationSelect);
+  }
+
+  if ($old['category_id'] === '' || !ctype_digit($old['category_id'])) {
+    $errors[] = 'Kategori wajib dipilih.';
+  }
+  if ($old['title'] === '') {
+    $errors[] = 'Judul wajib diisi.';
+  }
+  if ($old['price'] === '' || !is_numeric($old['price']) || (float)$old['price'] < 0) {
+    $errors[] = 'Harga tidak valid.';
+  }
+  if ($old['location'] === '') {
+    $errors[] = 'Lokasi wajib diisi.';
+  }
+
+  if (!$errors) {
+    try {
+      $stmt = $pdo->prepare('INSERT INTO ads (user_id, category_id, title, description, price, location) VALUES (?, ?, ?, ?, ?, ?)');
+      $stmt->execute([
+        $_SESSION['user_id'],
+        (int)$old['category_id'],
+        $old['title'],
+        $old['description'],
+        (float)$old['price'],
+        $old['location']
+      ]);
+      $adId = $pdo->lastInsertId();
+
+      // Handle images (optional)
+      if (!empty($_FILES['images']) && is_array($_FILES['images']['name'])) {
+        $count = count($_FILES['images']['name']);
+        $allowedExt = ['jpg','jpeg','png'];
+        $maxSize = 2 * 1024 * 1024; // 2MB
+        $uploadDir = __DIR__ . DIRECTORY_SEPARATOR . 'uploads';
+        if (!is_dir($uploadDir)) {
+          @mkdir($uploadDir, 0777, true);
+        }
+        for ($i = 0; $i < $count && $i < 5; $i++) {
+          $err = $_FILES['images']['error'][$i] ?? UPLOAD_ERR_NO_FILE;
+          if ($err !== UPLOAD_ERR_OK) { continue; }
+          $tmp = $_FILES['images']['tmp_name'][$i] ?? '';
+          $name = $_FILES['images']['name'][$i] ?? '';
+          $size = $_FILES['images']['size'][$i] ?? 0;
+          $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+          if (!in_array($ext, $allowedExt, true)) { continue; }
+          if ($size > $maxSize) { continue; }
+          $newName = 'ad_' . $adId . '_' . uniqid('', true) . '.' . $ext;
+          $dest = $uploadDir . DIRECTORY_SEPARATOR . $newName;
+          if (@move_uploaded_file($tmp, $dest)) {
+            $relative = 'uploads/' . $newName;
+            $stmtImg = $pdo->prepare('INSERT INTO ad_images (ad_id, image_path) VALUES (?, ?)');
+            $stmtImg->execute([$adId, $relative]);
+          }
+        }
+      }
+
+      $success = 'Iklan berhasil dipasang.';
+      $old = ['category_id' => '', 'title' => '', 'description' => '', 'price' => '', 'location' => ''];
+    } catch (Throwable $e) {
+      $errors[] = 'Gagal menyimpan iklan.';
+    }
+  }
+}
+?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -42,9 +155,9 @@
           <a href="/KF-OLX/#categories" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Kategori</a>
           <a href="/KF-OLX/#latest" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Iklan Terbaru</a>
           <hr class="my-2">
-          <a href="/KF-OLX/login.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Masuk</a>
-          <a href="/KF-OLX/register.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Daftar</a>
-          <a href="/KF-OLX/post-ad.php" class="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 text-center">Pasang Iklan</a>
+          <a href="login.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Masuk</a>
+          <a href="register.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Daftar</a>
+          <a href="post-ad.php" class="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 text-center">Pasang Iklan</a>
         </div>
       </div>
     </div>
@@ -61,48 +174,66 @@
     <section class="py-10">
       <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div class="lg:col-span-2">
-          <form action="#" method="post" enctype="multipart/form-data" class="bg-white border rounded-lg p-6 space-y-6">
+          <form action="" method="post" enctype="multipart/form-data" class="bg-white border rounded-lg p-6 space-y-6">
+            <?php if (!empty($errors)): ?>
+              <div class="rounded-md border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
+                <?php foreach ($errors as $e): ?>
+                  <div><?php echo htmlspecialchars($e, ENT_QUOTES, 'UTF-8'); ?></div>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
+            <?php if ($success): ?>
+              <div class="rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-4 py-3 text-sm">
+                <?php echo htmlspecialchars($success, ENT_QUOTES, 'UTF-8'); ?>
+              </div>
+            <?php endif; ?>
             <div>
               <label for="category_id" class="block text-sm font-medium mb-1">Kategori</label>
               <select id="category_id" name="category_id" class="w-full rounded-md border border-gray-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
                 <option value="">Pilih kategori</option>
-                <option value="1">Mobil</option>
-                <option value="2">Motor</option>
-                <option value="3">Properti</option>
-                <option value="4">Elektronik</option>
+                <?php foreach ($categories as $cat): ?>
+                  <option value="<?php echo (int)$cat['id']; ?>" <?php echo ($old['category_id'] !== '' && (int)$old['category_id'] === (int)$cat['id']) ? 'selected' : ''; ?>>
+                    <?php echo htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8'); ?>
+                  </option>
+                <?php endforeach; ?>
               </select>
             </div>
 
             <div>
               <label for="title" class="block text-sm font-medium mb-1">Judul Iklan</label>
-              <input type="text" id="title" name="title" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Contoh: iPhone 13 128GB mulus" maxlength="150" required>
+              <input type="text" id="title" name="title" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Contoh: iPhone 13 128GB mulus" maxlength="150" required value="<?php echo htmlspecialchars($old['title'], ENT_QUOTES, 'UTF-8'); ?>">
             </div>
 
             <div>
               <label for="description" class="block text-sm font-medium mb-1">Deskripsi</label>
-              <textarea id="description" name="description" rows="6" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Tulis detail produk, kondisi, kelengkapan, dan lainnya..."></textarea>
+              <textarea id="description" name="description" rows="6" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Tulis detail produk, kondisi, kelengkapan, dan lainnya..."><?php echo htmlspecialchars($old['description'], ENT_QUOTES, 'UTF-8'); ?></textarea>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label for="price" class="block text-sm font-medium mb-1">Harga (Rp)</label>
-                <input type="number" step="0.01" min="0" id="price" name="price" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Contoh: 1000000" required>
+                <input type="number" step="0.01" min="0" id="price" name="price" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Contoh: 1000000" required value="<?php echo htmlspecialchars($old['price'], ENT_QUOTES, 'UTF-8'); ?>">
               </div>
               <div>
-                <label for="location" class="block text-sm font-medium mb-1">Lokasi</label>
-                <input type="text" id="location" name="location" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Contoh: Jakarta, Bandung" required>
+                <label for="location_select" class="block text-sm font-medium mb-1">Lokasi</label>
+                <select id="location_select" name="location_select" class="w-full rounded-md border border-gray-300 px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
+                  <option value="">Pilih lokasi</option>
+                  <?php foreach ($locations as $loc): ?>
+                    <option value="<?php echo htmlspecialchars($loc, ENT_QUOTES, 'UTF-8'); ?>" <?php echo ($old['location'] !== '' && $old['location'] === $loc) ? 'selected' : ''; ?>>
+                      <?php echo htmlspecialchars($loc, ENT_QUOTES, 'UTF-8'); ?>
+                    </option>
+                  <?php endforeach; ?>
+                  <option value="OTHER" <?php echo ($old['location'] !== '' && !in_array($old['location'], $locations, true)) ? 'selected' : ''; ?>>Lainnya (tulis manual)</option>
+                </select>
+                <input type="text" id="location_other" name="location_other" class="mt-2 w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 <?php echo ($old['location'] !== '' && !in_array($old['location'], $locations, true)) ? '' : 'hidden'; ?>" placeholder="Tulis lokasi manual" value="<?php echo htmlspecialchars($old['location'], ENT_QUOTES, 'UTF-8'); ?>">
               </div>
             </div>
 
             <div>
               <label class="block text-sm font-medium mb-2">Foto Produk</label>
               <div class="text-xs text-gray-500 mb-2">Unggah hingga 5 foto. Format: JPG, PNG. Maks 2MB per foto.</div>
-              <input type="file" name="images[]" accept="image/*" multiple class="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
-              <div class="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2">
-                <div class="aspect-square bg-gray-100 rounded border grid place-items-center text-gray-400 text-xs">Preview</div>
-                <div class="aspect-square bg-gray-100 rounded border grid place-items-center text-gray-400 text-xs">Preview</div>
-                <div class="aspect-square bg-gray-100 rounded border grid place-items-center text-gray-400 text-xs">Preview</div>
-              </div>
+              <input id="imagesInput" type="file" name="images[]" accept="image/*" multiple class="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100">
+              <div id="previewGrid" class="mt-3 grid grid-cols-3 sm:grid-cols-5 gap-2"></div>
             </div>
 
             <div class="flex items-center justify-end gap-3 pt-2">
@@ -175,12 +306,79 @@
     (function(){
       const btn = document.getElementById('mobileMenuButton');
       const menu = document.getElementById('mobileMenu');
-      if (!btn || !menu) return;
-      btn.addEventListener('click', function(){
-        const isHidden = menu.classList.contains('hidden');
-        menu.classList.toggle('hidden');
-        btn.setAttribute('aria-expanded', String(isHidden));
-      });
+      if (btn && menu) {
+        btn.addEventListener('click', function(){
+          const isHidden = menu.classList.contains('hidden');
+          menu.classList.toggle('hidden');
+          btn.setAttribute('aria-expanded', String(isHidden));
+        });
+      }
+
+      const sel = document.getElementById('location_select');
+      const other = document.getElementById('location_other');
+      if (sel && other) {
+        const sync = function(){
+          const v = sel.value;
+          const isOther = v === 'OTHER';
+          if (isOther) {
+            other.classList.remove('hidden');
+            other.setAttribute('required', 'required');
+          } else {
+            other.classList.add('hidden');
+            other.removeAttribute('required');
+          }
+        };
+        sel.addEventListener('change', sync);
+        // initial
+        sync();
+      }
+
+      // Image preview thumbnails with remove (X)
+      const input = document.getElementById('imagesInput');
+      const grid = document.getElementById('previewGrid');
+      if (input && grid) {
+        const renderPreviews = function(){
+          grid.innerHTML = '';
+          const files = Array.from(input.files || []);
+          files.forEach(function(file, idx){
+            if (!file.type || !file.type.startsWith('image/')) return;
+            if (idx >= 5) return; // preview up to 5
+            const url = URL.createObjectURL(file);
+            const wrap = document.createElement('div');
+            wrap.className = 'relative aspect-square bg-gray-100 rounded border overflow-hidden';
+            const img = new Image();
+            img.className = 'w-full h-full object-cover';
+            img.onload = function(){ URL.revokeObjectURL(url); };
+            img.src = url;
+            // remove button
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.setAttribute('data-remove-idx', String(idx));
+            btn.className = 'absolute -top-2 -right-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-full w-6 h-6 grid place-items-center shadow';
+            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+            wrap.appendChild(img);
+            wrap.appendChild(btn);
+            grid.appendChild(wrap);
+          });
+        };
+
+        input.addEventListener('change', renderPreviews);
+        grid.addEventListener('click', function(e){
+          const target = e.target.closest('[data-remove-idx]');
+          if (!target) return;
+          const removeIdx = parseInt(target.getAttribute('data-remove-idx'), 10);
+          const current = Array.from(input.files || []);
+          const dt = new DataTransfer();
+          current.forEach(function(file, idx){
+            if (idx !== removeIdx) dt.items.add(file);
+          });
+          input.files = dt.files;
+          renderPreviews();
+        });
+
+        // initial render if any
+        if (input.files && input.files.length) renderPreviews();
+      }
     })();
   </script>
 </body>

@@ -31,9 +31,9 @@
           </svg>
         </button>
         <div class="hidden md:flex items-center gap-3">
-          <a href="#login" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Masuk</a>
-          <a href="#register" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Daftar</a>
-          <a href="#post-ad" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-semibold hover:bg-emerald-700">Pasang Iklan</a>
+          <a href="login.php" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Masuk</a>
+          <a href="register.php" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Daftar</a>
+          <a href="post-ad.php" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-semibold hover:bg-emerald-700">Pasang Iklan</a>
         </div>
       </div>
       <!-- Mobile menu panel -->
@@ -43,9 +43,9 @@
           <a href="#categories" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Kategori</a>
           <a href="#latest" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Iklan Terbaru</a>
           <hr class="my-2">
-          <a href="#login" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Masuk</a>
-          <a href="#register" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Daftar</a>
-          <a href="#post-ad" class="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 text-center">Pasang Iklan</a>
+          <a href="login.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Masuk</a>
+          <a href="register.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Daftar</a>
+          <a href="post-ad.php" class="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 text-center">Pasang Iklan</a>
         </div>
       </div>
     </div>
@@ -237,7 +237,7 @@
             <div class="text-2xl font-bold">Punya barang bekas? Pasang iklan sekarang!</div>
             <div class="text-white/90">Gratis, cepat, dan mudah. Terhubung dengan jutaan pembeli.</div>
           </div>
-          <a href="#post-ad" class="px-5 py-3 bg-white text-emerald-700 rounded-md font-semibold hover:bg-gray-100">Pasang Iklan</a>
+          <a href="post-ad.php" class="px-5 py-3 bg-white text-emerald-700 rounded-md font-semibold hover:bg-gray-100">Pasang Iklan</a>
         </div>
       </div>
     </section>
