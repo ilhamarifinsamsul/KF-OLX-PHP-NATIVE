@@ -3,7 +3,7 @@ require __DIR__ . '/config.php';
 
 $errors = [];
 $success = '';
-$old = ['name' => '', 'email' => ''];
+$old = ['name' => '', 'email' => '', 'whatsapp' => ''];
 
 // Handle POST request
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -12,10 +12,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $password_confirmation = $_POST['password_confirmation'] ?? '';
+    $whatsapp = trim($_POST['whatsapp'] ?? '');
 
     // Store old data
     $old['name'] = $name;
     $old['email'] = $email;
+    $old['whatsapp'] = $whatsapp;
 
     // Validation
     if ($name === '') {
@@ -30,6 +32,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($password !== $password_confirmation) {
         $errors[] = 'Konfirmasi password tidak cocok.';
     }
+
+    // Optional WhatsApp validation (allow + and digits, 8-20 chars)
+    if ($whatsapp !== '') {
+        if (!preg_match('/^\+?[0-9]{8,20}$/', $whatsapp)) {
+            $errors[] = 'Nomor WhatsApp tidak valid.';
+        }
+    }
     
     // Check if email is already registered
     if (!$errors) {
@@ -43,10 +52,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Register user
     if (!$errors) {
         $hash = password_hash($password, PASSWORD_DEFAULT);
-        $stmt = $pdo->prepare('INSERT INTO users (name, email, password) VALUES (?, ?, ?)');
-        $stmt->execute([$name, $email, $hash]);
+        $stmt = $pdo->prepare('INSERT INTO users (name, email, password, whatsapp) VALUES (?, ?, ?, ?)');
+        $stmt->execute([$name, $email, $hash, $whatsapp !== '' ? $whatsapp : null]);
         $success = 'Pendaftaran berhasil. Silakan masuk.';
-        $old = ['name' => '', 'email' => ''];
+        $old = ['name' => '', 'email' => '', 'whatsapp' => ''];
     }
 }
 ?>
@@ -98,6 +107,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div>
               <label for="email" class="block text-sm font-medium mb-1">Email</label>
               <input type="email" id="email" name="email" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="nama@email.com" required value="<?php echo htmlspecialchars($old['email'], ENT_QUOTES, 'UTF-8'); ?>">
+            </div>
+            <div>
+              <label for="whatsapp" class="block text-sm font-medium mb-1">WhatsApp (opsional)</label>
+              <input type="text" id="whatsapp" name="whatsapp" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="mis. +6281234567890" value="<?php echo htmlspecialchars($old['whatsapp'], ENT_QUOTES, 'UTF-8'); ?>">
             </div>
             <div>
               <label for="password" class="block text-sm font-medium mb-1">Password</label>
