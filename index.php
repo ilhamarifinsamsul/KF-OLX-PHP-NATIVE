@@ -196,7 +196,7 @@ $ads = $stmt->fetchAll();
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           <?php foreach ($ads as $ad): ?>
-            <a href="#" class="border rounded-lg overflow-hidden bg-white hover:shadow-sm">
+            <a href="detail.php?id=<?php echo (int)$ad['id']; ?>" class="border rounded-lg overflow-hidden bg-white hover:shadow-sm">
               <div class="aspect-square sm:aspect-[4/3] bg-gray-100">
                 <?php
                   $imgPath = $ad['image_path'] ?? '';
