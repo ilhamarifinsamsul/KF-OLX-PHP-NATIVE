@@ -78,6 +78,9 @@ $ads = $stmt->fetchAll();
           <a href="#" class="hover:text-emerald-600">Beranda</a>
           <a href="#categories" class="hover:text-emerald-600">Kategori</a>
           <a href="#latest" class="hover:text-emerald-600">Iklan Terbaru</a>
+          <?php if (!empty($_SESSION['user_id'])): ?>
+            <a href="my-ads.php" class="hover:text-emerald-600">Iklan Saya</a>
+          <?php endif; ?>
         </nav>
         <button id="mobileMenuButton" class="md:hidden inline-flex items-center justify-center p-2 rounded-md text-gray-600 hover:text-emerald-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500" aria-controls="mobileMenu" aria-expanded="false">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
@@ -88,6 +91,7 @@ $ads = $stmt->fetchAll();
           <?php if (!empty($_SESSION['user_id'])): ?>
             <img src="<?php echo h($avatarUrl); ?>" alt="avatar" class="w-8 h-8 rounded-full border" />
             <div class="px-1 py-2 text-sm font-semibold">Halo, <?php echo h($_SESSION['user_name'] ?? 'Pengguna'); ?></div>
+            <a href="my-ads.php" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Iklan Saya</a>
             <a href="logout.php" class="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700">Keluar</a>
             <a href="post-ad.php" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-semibold hover:bg-emerald-700">Pasang Iklan</a>
           <?php else: ?>
@@ -103,12 +107,16 @@ $ads = $stmt->fetchAll();
           <a href="#" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Beranda</a>
           <a href="#categories" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Kategori</a>
           <a href="#latest" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Iklan Terbaru</a>
+          <?php if (!empty($_SESSION['user_id'])): ?>
+            <a href="my-ads.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Iklan Saya</a>
+          <?php endif; ?>
           <hr class="my-2">
           <?php if (!empty($_SESSION['user_id'])): ?>
             <div class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium">
               <img src="<?php echo h($avatarUrl); ?>" alt="avatar" class="w-8 h-8 rounded-full border" />
               <span>Halo, <?php echo h($_SESSION['user_name'] ?? 'Pengguna'); ?></span>
             </div>
+            <a href="my-ads.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Iklan Saya</a>
             <a href="logout.php" class="block px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-gray-50">Keluar</a>
             <a href="post-ad.php" class="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 text-center">Pasang Iklan</a>
           <?php else: ?>
