@@ -4,6 +4,12 @@ require __DIR__ . '/config.php';
 
 $errors = [];
 $old = ['email' => ''];
+$needLoginMsg = isset($_GET['need']) ? 'Silakan login untuk melanjutkan.' : '';
+$redirectAfter = trim($_GET['redirect'] ?? '');
+// sanitize redirect target (relative path only)
+if ($redirectAfter !== '' && (preg_match('/^https?:/i', $redirectAfter) || strpos($redirectAfter, '//') === 0)) {
+    $redirectAfter = '';
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim($_POST['email'] ?? '');
@@ -18,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$errors) {
-        $stmt = $pdo->prepare('SELECT id, name, email, password FROM users WHERE email = ? LIMIT 1');
+        $stmt = $pdo->prepare('SELECT id, name, email, password, whatsapp FROM users WHERE email = ? LIMIT 1');
         $stmt->execute([$email]);
         $user = $stmt->fetch();
         if (!$user || !password_verify($password, $user['password'])) {
@@ -27,8 +33,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['user_name'] = $user['name'];
             $_SESSION['user_email'] = $user['email'];
+            $_SESSION['user_whatsapp'] = $user['whatsapp'] ?? null;
             $_SESSION['flash'] = 'Berhasil login';
-            header('Location: index.php');
+            if ($redirectAfter !== '') {
+                header('Location: ' . $redirectAfter);
+            } else {
+                header('Location: index.php');
+            }
             exit;
         }
     }
@@ -61,6 +72,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <section class="py-10">
       <div class="max-w-md mx-auto px-4 sm:px-6 lg:px-8">
         <div class="bg-white border rounded-lg p-6 shadow-sm">
+          <?php if ($needLoginMsg): ?>
+            <div class="mb-4 rounded-md border border-amber-200 bg-amber-50 text-amber-800 px-4 py-3 text-sm">
+              <?php echo htmlspecialchars($needLoginMsg, ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+          <?php endif; ?>
           <?php if (!empty($errors)): ?>
             <div class="mb-4 rounded-md border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-sm">
               <?php foreach ($errors as $e): ?>
@@ -69,6 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
           <?php endif; ?>
           <form action="" method="post" class="space-y-4" novalidate>
+            <?php if ($redirectAfter !== ''): ?>
+              <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirectAfter, ENT_QUOTES, 'UTF-8'); ?>">
+            <?php endif; ?>
             <div>
               <label for="email" class="block text-sm font-medium mb-1">Email</label>
               <input type="email" id="email" name="email" class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="nama@email.com" required value="<?php echo htmlspecialchars($old['email'], ENT_QUOTES, 'UTF-8'); ?>">
