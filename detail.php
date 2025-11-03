@@ -1,5 +1,8 @@
 <?php
-session_start();
+
+if (session_status() == PHP_SESSION_NONE) {
+  session_start();
+}
 require __DIR__ . '/config.php';
 
 function h($v){ return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
