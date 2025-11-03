@@ -91,8 +91,10 @@ $ads = $stmt->fetchAll();
         </button>
         <div class="hidden md:flex items-center gap-3">
           <?php if (!empty($_SESSION['user_id'])): ?>
-            <img src="<?php echo h($avatarUrl); ?>" alt="avatar" class="w-8 h-8 rounded-full border" />
-            <div class="px-1 py-2 text-sm font-semibold">Halo, <?php echo h($_SESSION['user_name'] ?? 'Pengguna'); ?></div>
+            <a href="profile.php" class="flex items-center gap-2">
+              <img src="<?php echo h($avatarUrl); ?>" alt="avatar" class="w-8 h-8 rounded-full border" />
+              <div class="px-1 py-2 text-sm font-semibold">Halo, <?php echo h($_SESSION['user_name'] ?? 'Pengguna'); ?></div>
+            </a>
             <a href="my-ads.php" class="px-3 py-2 text-sm font-medium hover:text-emerald-700">Iklan Saya</a>
             <a href="logout.php" class="px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700">Keluar</a>
             <a href="post-ad.php" class="px-4 py-2 bg-emerald-600 text-white rounded-md text-sm font-semibold hover:bg-emerald-700">Pasang Iklan</a>
@@ -114,10 +116,10 @@ $ads = $stmt->fetchAll();
           <?php endif; ?>
           <hr class="my-2">
           <?php if (!empty($_SESSION['user_id'])): ?>
-            <div class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium">
+            <a href="profile.php" class="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium">
               <img src="<?php echo h($avatarUrl); ?>" alt="avatar" class="w-8 h-8 rounded-full border" />
               <span>Halo, <?php echo h($_SESSION['user_name'] ?? 'Pengguna'); ?></span>
-            </div>
+            </a>
             <a href="my-ads.php" class="block px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Iklan Saya</a>
             <a href="logout.php" class="block px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-gray-50">Keluar</a>
             <a href="post-ad.php" class="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 text-center">Pasang Iklan</a>
